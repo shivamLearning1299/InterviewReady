@@ -1,0 +1,282 @@
+[
+  {
+    "title": "SOLID Principles",
+    "slug": "solid-principles",
+    "category": "fundamentals",
+    "difficulty": "easy",
+    "estimated_minutes": 60,
+    "description": "The five object-oriented design principles and the specific maintenance pain each one prevents.",
+    "learning_objectives": [
+      "State each principle and the failure mode it addresses",
+      "Identify single-responsibility violations in an existing class",
+      "Explain why depending on abstractions reduces coupling"
+    ],
+    "key_concepts": ["SRP", "OCP", "LSP", "ISP", "DIP"]
+  },
+  {
+    "title": "Encapsulation and Information Hiding",
+    "slug": "encapsulation-and-information-hiding",
+    "category": "fundamentals",
+    "difficulty": "easy",
+    "estimated_minutes": 45,
+    "description": "Designing class boundaries so internal representation can change without breaking callers.",
+    "learning_objectives": [
+      "Choose an interface that hides implementation detail",
+      "Recognise when getters/setters are an anti-pattern",
+      "Decide what belongs in the public surface of a class"
+    ],
+    "key_concepts": ["Encapsulation", "Invariants", "Interfaces"]
+  },
+  {
+    "title": "Cohesion and Coupling",
+    "slug": "cohesion-and-coupling",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 50,
+    "description": "The two metrics that predict how expensive a codebase is to change.",
+    "learning_objectives": [
+      "Distinguish high cohesion from low coupling in a design",
+      "Use dependency direction to reduce ripple effects",
+      "Diagnose a design that is hard to unit test"
+    ],
+    "key_concepts": ["Cohesion", "Coupling", "Dependency Direction"]
+  },
+  {
+    "title": "UML Class and Sequence Diagrams",
+    "slug": "uml-class-and-sequence-diagrams",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 60,
+    "description": "Communicating a design on a whiteboard during an interview using standard notation.",
+    "learning_objectives": [
+      "Draw a class diagram with correct relationship notation",
+      "Model a runtime interaction as a sequence diagram",
+      "Use diagrams to justify a design decision"
+    ],
+    "key_concepts": ["Class Diagram", "Sequence Diagram", "Aggregation vs Composition"]
+  },
+  {
+    "title": "Interfaces, Abstract Classes and Composition",
+    "slug": "interfaces-abstract-classes-composition",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 55,
+    "description": "Choosing between inheritance and composition, and knowing when each is wrong.",
+    "learning_objectives": [
+      "Prefer composition over inheritance where behaviour varies",
+      "Explain the fragile base class problem",
+      "Decide between an interface and an abstract class"
+    ],
+    "key_concepts": ["Composition over Inheritance", "Fragile Base Class", "Polymorphism"]
+  },
+  {
+    "title": "Singleton Pattern",
+    "slug": "singleton-pattern",
+    "category": "design_patterns",
+    "difficulty": "easy",
+    "estimated_minutes": 35,
+    "description": "Controlling instance count, and why this pattern is usually better replaced by dependency injection.",
+    "learning_objectives": [
+      "Implement a thread-safe singleton",
+      "Explain the testing problems a singleton introduces",
+      "Offer a cleaner alternative using injection"
+    ],
+    "key_concepts": ["Singleton", "Global State", "Testability"]
+  },
+  {
+    "title": "Factory and Abstract Factory",
+    "slug": "factory-and-abstract-factory",
+    "category": "design_patterns",
+    "difficulty": "medium",
+    "estimated_minutes": 50,
+    "description": "Centralising object creation so callers depend on an interface rather than a concrete type.",
+    "learning_objectives": [
+      "Refactor scattered construction into a factory",
+      "Decide when an abstract factory earns its complexity",
+      "Keep creation logic out of domain objects"
+    ],
+    "key_concepts": ["Factory Method", "Abstract Factory", "Dependency Inversion"]
+  },
+  {
+    "title": "Builder Pattern",
+    "slug": "builder-pattern",
+    "category": "design_patterns",
+    "difficulty": "medium",
+    "estimated_minutes": 45,
+    "description": "Constructing complex objects step by step, avoiding telescoping constructors.",
+    "learning_objectives": [
+      "Replace a constructor with many optional parameters",
+      "Decide between a builder and named arguments",
+      "Enforce required fields at build time"
+    ],
+    "key_concepts": ["Builder", "Fluent Interface", "Immutability"]
+  },
+  {
+    "title": "Strategy Pattern",
+    "slug": "strategy-pattern",
+    "category": "design_patterns",
+    "difficulty": "medium",
+    "estimated_minutes": 45,
+    "description": "Swapping interchangeable algorithms at runtime without branching inside the caller.",
+    "learning_objectives": [
+      "Replace a growing if/switch ladder with strategies",
+      "Keep strategies stateless where possible",
+      "Select a strategy from configuration or input"
+    ],
+    "key_concepts": ["Strategy", "Open/Closed Principle", "Composition"]
+  },
+  {
+    "title": "Observer Pattern",
+    "slug": "observer-pattern",
+    "category": "design_patterns",
+    "difficulty": "medium",
+    "estimated_minutes": 50,
+    "description": "Publishing state changes to interested parties without tight coupling.",
+    "learning_objectives": [
+      "Design a publish/subscribe relationship",
+      "Handle unsubscribe and failure of a subscriber",
+      "Recognise the memory-leak risk of strong references"
+    ],
+    "key_concepts": ["Observer", "Pub/Sub", "Loose Coupling"]
+  },
+  {
+    "title": "Decorator Pattern",
+    "slug": "decorator-pattern",
+    "category": "design_patterns",
+    "difficulty": "medium",
+    "estimated_minutes": 45,
+    "description": "Adding behaviour by wrapping rather than subclassing, and composing wrappers freely.",
+    "learning_objectives": [
+      "Wrap an object to add cross-cutting behaviour",
+      "Compare decorator with inheritance for behaviour stacking",
+      "Order decorators correctly when they interact"
+    ],
+    "key_concepts": ["Decorator", "Wrapper", "Cross-cutting Concerns"]
+  },
+  {
+    "title": "Adapter and Facade",
+    "slug": "adapter-and-facade",
+    "category": "design_patterns",
+    "difficulty": "medium",
+    "estimated_minutes": 45,
+    "description": "Making incompatible interfaces work together, and simplifying a complex subsystem behind one entry point.",
+    "learning_objectives": [
+      "Wrap a third-party API behind your own interface",
+      "Distinguish adapter (compatibility) from facade (simplification)",
+      "Isolate vendor changes to one class"
+    ],
+    "key_concepts": ["Adapter", "Facade", "Boundary Isolation"]
+  },
+  {
+    "title": "Command Pattern",
+    "slug": "command-pattern",
+    "category": "design_patterns",
+    "difficulty": "medium",
+    "estimated_minutes": 50,
+    "description": "Representing an action as an object, enabling undo, queuing and logging.",
+    "learning_objectives": [
+      "Encapsulate a request as an object",
+      "Implement undo by pairing execute with revert",
+      "Queue or log commands for replay"
+    ],
+    "key_concepts": ["Command", "Undo", "Invoker"]
+  },
+  {
+    "title": "State Pattern",
+    "slug": "state-pattern",
+    "category": "design_patterns",
+    "difficulty": "medium",
+    "estimated_minutes": 50,
+    "description": "Modelling an object whose behaviour changes with its internal state.",
+    "learning_objectives": [
+      "Replace state-dependent branching with state objects",
+      "Define legal transitions explicitly",
+      "Avoid invalid states by construction"
+    ],
+    "key_concepts": ["State", "State Machine", "Transitions"]
+  },
+  {
+    "title": "Parking Lot",
+    "slug": "parking-lot",
+    "category": "design_exercises",
+    "difficulty": "medium",
+    "estimated_minutes": 75,
+    "description": "The classic LLD warm-up: model floors, spots, vehicles, ticketing and payment.",
+    "learning_objectives": [
+      "Derive core entities from the requirements before coding",
+      "Assign spot types to vehicle types with correct semantics",
+      "Make fee calculation extensible for future pricing rules"
+    ],
+    "key_concepts": ["Entity Modelling", "Strategy", "Fee Calculation"]
+  },
+  {
+    "title": "BookMyShow / Movie Ticket Booking",
+    "slug": "movie-ticket-booking",
+    "category": "design_exercises",
+    "difficulty": "hard",
+    "estimated_minutes": 90,
+    "description": "Seat inventory, concurrent booking, temporary holds and payment failure recovery.",
+    "learning_objectives": [
+      "Prevent double-booking under concurrency",
+      "Model a seat hold with expiry",
+      "Recover cleanly when payment fails after a hold"
+    ],
+    "key_concepts": ["Concurrency", "Locking", "Reservation Expiry"]
+  },
+  {
+    "title": "Splitwise / Expense Sharing",
+    "slug": "expense-sharing",
+    "category": "design_exercises",
+    "difficulty": "hard",
+    "estimated_minutes": 90,
+    "description": "Groups, unequal splits, balances and debt simplification.",
+    "learning_objectives": [
+      "Model split strategies (equal, exact, percentage, shares)",
+      "Maintain consistent balances on every mutation",
+      "Simplify a debt graph into fewer settlements"
+    ],
+    "key_concepts": ["Ledger", "Split Strategy", "Graph Simplification"]
+  },
+  {
+    "title": "Food Delivery (Zomato / Swiggy)",
+    "slug": "food-delivery",
+    "category": "design_exercises",
+    "difficulty": "hard",
+    "estimated_minutes": 90,
+    "description": "Restaurant menus, cart, order lifecycle, assignment and delivery tracking.",
+    "learning_objectives": [
+      "Model the order state machine end to end",
+      "Assign a delivery partner fairly and consistently",
+      "Handle cancellation and refund at each lifecycle stage"
+    ],
+    "key_concepts": ["State Machine", "Assignment", "Order Lifecycle"]
+  },
+  {
+    "title": "Chess Game",
+    "slug": "chess-game",
+    "category": "design_exercises",
+    "difficulty": "medium",
+    "estimated_minutes": 80,
+    "description": "Board, pieces, legal move generation, check and checkmate detection.",
+    "learning_objectives": [
+      "Model pieces with polymorphic move rules",
+      "Keep move validation separate from movement",
+      "Detect check without duplicating rule logic"
+    ],
+    "key_concepts": ["Polymorphism", "Rule Engine", "Board State"]
+  },
+  {
+    "title": "Rate Limiter",
+    "slug": "rate-limiter",
+    "category": "design_exercises",
+    "difficulty": "medium",
+    "estimated_minutes": 75,
+    "description": "Token bucket, sliding window and fixed window, with the trade-offs of each.",
+    "learning_objectives": [
+      "Implement a token-bucket limiter that is thread-safe",
+      "Compare fixed and sliding windows for burst behaviour",
+      "Decide between in-process and shared-state limiting"
+    ],
+    "key_concepts": ["Token Bucket", "Sliding Window", "Thread Safety"]
+  }
+]

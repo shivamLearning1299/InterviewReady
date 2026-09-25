@@ -1,0 +1,36 @@
+# Keep the build context small and — critically — keep secrets out of the image.
+# `.env` would otherwise be copied into the runtime layer by `COPY . .` and would end up
+# baked into the published image.
+
+# --- secrets ---
+.env
+.env.*
+!.env.example
+
+# --- python artefacts ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# --- local state / generated output ---
+schema_snapshot.json
+schema_report.md
+backups/
+
+# --- tooling that the image does not need ---
+.git/
+.gitignore
+tests/
+docs/
+*.md
+Dockerfile
+.dockerignore
+render.yaml

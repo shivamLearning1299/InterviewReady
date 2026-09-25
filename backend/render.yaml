@@ -1,0 +1,48 @@
+# Render blueprint for the InterviewReady API.
+#
+# Secrets are declared with `sync: false`, so Render prompts for them in the dashboard rather
+# than expecting them in the repository. Set these before the first deploy:
+#
+#   DATABASE_URL               - use the SESSION POOLER string
+#   DATABASE_URL_DIRECT        - the direct (db.<ref>.supabase.co) string
+#   SUPABASE_URL               - project URL
+#   SUPABASE_PUBLISHABLE_KEY   - publishable / anon key
+#   AI_API_KEY                 - only if the AI tutor is enabled
+#
+# Why the pooler for DATABASE_URL: `db.<ref>.supabase.co` is IPv6-only, and Render's default
+# networking is IPv4-only, so a direct connection fails to resolve there.
+
+services:
+  - type: web
+    name: interviewready-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health/ready
+    # Migrations run before the server starts, so a deployment either brings the schema up to
+    # date or fails loudly rather than serving against an outdated schema.
+    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_JSON
+        value: "true"
+      - key: AI_PROVIDER
+        value: gemini
+      # Secrets: set these in the Render dashboard.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.12.7"

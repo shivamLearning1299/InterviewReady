@@ -1,0 +1,45 @@
+[project]
+name = "interviewready-backend"
+version = "1.0.0"
+description = "InterviewReady backend API (FastAPI + Supabase)"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+# F821 (undefined name) and F811 (redefinition) are deliberately part of the default "F"
+# set: `ruff --fix` once removed an import that was still referenced, and only F821 caught
+# it. Never drop those from `select`, or that class of breakage becomes invisible.
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    "E501",   # line length is handled by the formatter
+    "B008",   # FastAPI Depends() in defaults is idiomatic
+    "RUF001", # ambiguous unicode chars in docstrings
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/*" = ["E", "F", "I", "UP"]
+"tests/*" = ["E", "F", "I", "UP", "B", "SIM"]
+# `__all__` is grouped by domain (catalog, DSA, LLD, HLD, …) rather than alphabetised,
+# because the grouping is what makes a 24-model re-export list readable.
+"app/db/models/__init__.py" = ["RUF022"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# One event loop for the whole session. Async engines and connections are loop-bound, so a
+# per-test loop would make the session-scoped engine unusable ("attached to a different
+# loop"). Sharing a loop keeps fixtures and tests consistent.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+filterwarnings = [
+    "ignore::DeprecationWarning:passlib.*",
+    "ignore::DeprecationWarning:pkg_resources.*",
+]
+markers = [
+    "db: test requires a live PostgreSQL database (TEST_DATABASE_URL)",
+    "slow: slower running test",
+]

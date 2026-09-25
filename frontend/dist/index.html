@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="InterviewReady — DSA, LLD, HLD preparation with spaced revision and an AI tutor."
+    />
+    <title>InterviewReady</title>
+    <script>
+      // Applied before first paint so the app never flashes the wrong theme.
+      (function () {
+        try {
+          var stored = localStorage.getItem('ir-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = stored ? stored === 'dark' : prefersDark;
+          document.documentElement.classList.toggle('dark', dark);
+        } catch (error) {
+          /* ignore */
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-DTR5GEyj.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BJ3c0A3A.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

@@ -1,0 +1,280 @@
+@import 'tailwindcss';
+
+/* Tailwind v4: class-based dark mode (the theme provider toggles `.dark` on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ==========================================================================
+   Design tokens
+   Restrained, neutral palette. Light is the reference implementation; the dark
+   set mirrors the same contrast relationships rather than inverting them.
+   ========================================================================== */
+:root {
+  --background: #ffffff;
+  --surface: #ffffff;
+  --surface-hover: #f8f9fb;
+  --muted: #f5f6f8;
+  --muted-foreground: #667085;
+  --subtle-foreground: #98a2b3;
+  --foreground: #101319;
+  --border: #e4e7ec;
+  --border-strong: #ced3db;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --primary-soft: #eff4ff;
+  --accent: #f2f4f7;
+  --accent-foreground: #101319;
+  --ring: #9db9fb;
+  --sidebar: #fafbfc;
+  --overlay: rgb(16 19 25 / 0.45);
+
+  --easy: #047857;
+  --easy-soft: #ecfdf5;
+  --medium: #b45309;
+  --medium-soft: #fffaeb;
+  --hard: #be123c;
+  --hard-soft: #fff1f3;
+
+  --success: #059669;
+  --success-soft: #ecfdf5;
+  --warning: #d97706;
+  --warning-soft: #fffaeb;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --info: #2563eb;
+  --info-soft: #eff4ff;
+  --neutral-soft: #f2f4f7;
+
+  /* Chart series: distinguishable in both themes, no gradients. */
+  --chart-1: #2563eb;
+  --chart-2: #0d9488;
+  --chart-3: #7c3aed;
+  --chart-4: #ea580c;
+  --chart-5: #64748b;
+  --chart-grid: #e9ecf1;
+  --chart-axis: #8b93a1;
+}
+
+.dark {
+  --background: #0b0c0e;
+  --surface: #141519;
+  --surface-hover: #1a1c21;
+  --muted: #1a1c21;
+  --muted-foreground: #99a1ad;
+  --subtle-foreground: #71798a;
+  --foreground: #f2f4f7;
+  --border: #24272d;
+  --border-strong: #33383f;
+  --primary: #4b8dff;
+  --primary-hover: #6ba0ff;
+  --primary-foreground: #ffffff;
+  --primary-soft: #16233d;
+  --accent: #1d2026;
+  --accent-foreground: #f2f4f7;
+  --ring: #3f6fd8;
+  --sidebar: #0e0f12;
+  --overlay: rgb(0 0 0 / 0.6);
+
+  --easy: #34d399;
+  --easy-soft: #10281f;
+  --medium: #fbbf24;
+  --medium-soft: #2b2110;
+  --hard: #fb7185;
+  --hard-soft: #2e1419;
+
+  --success: #34d399;
+  --success-soft: #10281f;
+  --warning: #fbbf24;
+  --warning-soft: #2b2110;
+  --danger: #f87171;
+  --danger-soft: #2c1415;
+  --info: #6ba0ff;
+  --info-soft: #16233d;
+  --neutral-soft: #1d2026;
+
+  --chart-1: #4b8dff;
+  --chart-2: #2dd4bf;
+  --chart-3: #a78bfa;
+  --chart-4: #fb923c;
+  --chart-5: #94a3b8;
+  --chart-grid: #23262c;
+  --chart-axis: #767e8c;
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-overlay: var(--overlay);
+
+  --color-easy: var(--easy);
+  --color-easy-soft: var(--easy-soft);
+  --color-medium: var(--medium);
+  --color-medium-soft: var(--medium-soft);
+  --color-hard: var(--hard);
+  --color-hard-soft: var(--hard-soft);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-neutral-soft: var(--neutral-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Compact radii: professional, not pill-shaped. */
+  --radius-card: 0.625rem;
+  --radius-control: 0.5rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    letter-spacing: -0.011em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--primary-soft);
+    color: var(--foreground);
+  }
+
+  /* Thin, unobtrusive scrollbars so long study sessions stay calm. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+}
+
+@layer utilities {
+  /* Numeric columns should never jitter as values change. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .line-clamp-2-safe {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  @keyframes ir-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-fade-in {
+    animation: ir-fade-in 140ms ease-out;
+  }
+
+  @keyframes ir-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  .animate-soft-pulse {
+    animation: ir-pulse 1.6s ease-in-out infinite;
+  }
+}

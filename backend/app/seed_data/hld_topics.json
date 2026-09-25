@@ -1,0 +1,282 @@
+[
+  {
+    "title": "Latency, Throughput and the Numbers Every Engineer Should Know",
+    "slug": "latency-throughput-numbers",
+    "category": "fundamentals",
+    "difficulty": "easy",
+    "estimated_minutes": 50,
+    "description": "The order-of-magnitude latencies that make a capacity estimate credible on a whiteboard.",
+    "learning_objectives": [
+      "Recall the latency of memory, SSD, disk seek and a cross-region round trip",
+      "Convert between requests per second and peak concurrency",
+      "Use Fermi estimation to sanity-check a design"
+    ],
+    "key_concepts": ["Latency Numbers", "Capacity Estimation", "Back-of-Envelope"]
+  },
+  {
+    "title": "CAP Theorem and Consistency Models",
+    "slug": "cap-theorem-consistency-models",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 60,
+    "description": "What CAP actually constrains, and the practical consistency choices it implies.",
+    "learning_objectives": [
+      "State CAP precisely without the common misstatement",
+      "Match an application to strong, eventual or causal consistency",
+      "Explain PACELC's latency trade-off"
+    ],
+    "key_concepts": ["CAP", "PACELC", "Eventual Consistency", "Quorums"]
+  },
+  {
+    "title": "Load Balancing and Service Discovery",
+    "slug": "load-balancing-service-discovery",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 55,
+    "description": "Distributing traffic, health checking, and how clients find healthy instances.",
+    "learning_objectives": [
+      "Choose between L4 and L7 balancing for a workload",
+      "Compare round robin with least-connections and consistent hashing",
+      "Design health checks that remove bad instances quickly"
+    ],
+    "key_concepts": ["L4 vs L7", "Health Checks", "Consistent Hashing"]
+  },
+  {
+    "title": "Caching Strategies and Eviction",
+    "slug": "caching-strategies-eviction",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 60,
+    "description": "Cache-aside, write-through and write-behind, plus invalidation and stampede control.",
+    "learning_objectives": [
+      "Pick a cache write strategy per access pattern",
+      "Prevent a cache stampede on a hot key",
+      "Reason about staleness and invalidation scope"
+    ],
+    "key_concepts": ["Cache-Aside", "Write-Through", "TTL", "Stampede"]
+  },
+  {
+    "title": "Database Indexing and Query Planning",
+    "slug": "database-indexing-query-planning",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 65,
+    "description": "How indexes change the cost of a query, and when they stop helping.",
+    "learning_objectives": [
+      "Read a query plan and identify a missing index",
+      "Design a composite index for a filter plus sort",
+      "Recognise write-amplification cost of over-indexing"
+    ],
+    "key_concepts": ["B-Tree Index", "Composite Index", "Query Plan"]
+  },
+  {
+    "title": "Sharding and Partitioning",
+    "slug": "sharding-and-partitioning",
+    "category": "fundamentals",
+    "difficulty": "hard",
+    "estimated_minutes": 75,
+    "description": "Splitting data across nodes while keeping queries and hotspots manageable.",
+    "learning_objectives": [
+      "Choose a shard key that avoids hotspots",
+      "Handle a shard rebalance without downtime",
+      "Decide between range, hash and directory sharding"
+    ],
+    "key_concepts": ["Shard Key", "Hotspot", "Rebalancing"]
+  },
+  {
+    "title": "Replication, Quorums and Failover",
+    "slug": "replication-quorums-failover",
+    "category": "fundamentals",
+    "difficulty": "hard",
+    "estimated_minutes": 75,
+    "description": "Leader-follower and quorum replication, read-your-writes, and split-brain avoidance.",
+    "learning_objectives": [
+      "Compare synchronous and asynchronous replication",
+      "Guarantee read-your-writes for a user",
+      "Prevent split-brain during a partition"
+    ],
+    "key_concepts": ["Leader-Follower", "Quorum", "Split Brain", "Read-Your-Writes"]
+  },
+  {
+    "title": "Message Queues and Event Streaming",
+    "slug": "message-queues-and-event-streaming",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 65,
+    "description": "Decoupling producers from consumers, and the delivery guarantees each broker offers.",
+    "learning_objectives": [
+      "Choose between a queue and a log for a use case",
+      "Handle at-least-once delivery with idempotent consumers",
+      "Design a dead-letter path for poison messages"
+    ],
+    "key_concepts": ["At-Least-Once", "Idempotency", "Dead Letter Queue", "Ordering"]
+  },
+  {
+    "title": "Idempotency and Exactly-Once Semantics",
+    "slug": "idempotency-and-exactly-once",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 55,
+    "description": "Why retries are inevitable, and how to make repeated operations harmless.",
+    "learning_objectives": [
+      "Design an idempotency-key scheme for a payment API",
+      "Distinguish idempotent from exactly-once processing",
+      "Detect and discard duplicate side effects"
+    ],
+    "key_concepts": ["Idempotency Key", "Deduplication", "Retries"]
+  },
+  {
+    "title": "Monitoring, Alerting and SLOs",
+    "slug": "monitoring-alerting-slos",
+    "category": "fundamentals",
+    "difficulty": "medium",
+    "estimated_minutes": 55,
+    "description": "Measuring a system's health in a way that produces actionable alerts.",
+    "learning_objectives": [
+      "Define SLIs and an SLO with an error budget",
+      "Alert on symptoms rather than causes",
+      "Instrument a service for latency percentiles"
+    ],
+    "key_concepts": ["SLI", "SLO", "Error Budget", "Percentiles"]
+  },
+  {
+    "title": "Design a URL Shortener",
+    "slug": "design-url-shortener",
+    "category": "system_design",
+    "difficulty": "easy",
+    "estimated_minutes": 60,
+    "description": "The entry-level design: key generation, storage, redirection and analytics.",
+    "learning_objectives": [
+      "Generate short keys without collisions",
+      "Serve redirects with minimal latency",
+      "Estimate storage growth and read/write ratio"
+    ],
+    "key_concepts": ["Key Generation", "Base62", "Caching", "Read-Heavy"]
+  },
+  {
+    "title": "Design a Rate Limiter at Scale",
+    "slug": "design-rate-limiter-at-scale",
+    "category": "system_design",
+    "difficulty": "medium",
+    "estimated_minutes": 70,
+    "description": "Distributed rate limiting where state cannot live in one process.",
+    "learning_objectives": [
+      "Choose an algorithm that tolerates bursts correctly",
+      "Keep counters consistent across nodes",
+      "Fail open or closed deliberately during an outage"
+    ],
+    "key_concepts": ["Token Bucket", "Shared State", "Fail-Open"]
+  },
+  {
+    "title": "Design a Chat / Messaging System",
+    "slug": "design-a-chat-system",
+    "category": "system_design",
+    "difficulty": "hard",
+    "estimated_minutes": 90,
+    "description": "Real-time delivery, ordering, presence and offline message history.",
+    "learning_objectives": [
+      "Deliver messages in order per conversation",
+      "Handle presence and fan-out for group chats",
+      "Store and page message history efficiently"
+    ],
+    "key_concepts": ["WebSockets", "Fan-Out", "Ordering", "Presence"]
+  },
+  {
+    "title": "Design a News Feed",
+    "slug": "design-a-news-feed",
+    "category": "system_design",
+    "difficulty": "hard",
+    "estimated_minutes": 90,
+    "description": "The fan-out-on-write versus fan-out-on-read trade-off, made concrete.",
+    "learning_objectives": [
+      "Choose a fan-out strategy for celebrity and normal users",
+      "Rank a feed with bounded latency",
+      "Keep feed generation incremental"
+    ],
+    "key_concepts": ["Fan-Out", "Ranking", "Timeline Cache"]
+  },
+  {
+    "title": "Design a Video Streaming Platform",
+    "slug": "design-video-streaming",
+    "category": "system_design",
+    "difficulty": "hard",
+    "estimated_minutes": 95,
+    "description": "Upload, transcoding pipeline, adaptive bitrate delivery and CDN strategy.",
+    "learning_objectives": [
+      "Design an asynchronous transcoding pipeline",
+      "Choose a chunking and bitrate ladder",
+      "Serve video from the edge with correct caching"
+    ],
+    "key_concepts": ["Transcoding", "Adaptive Bitrate", "CDN", "Chunking"]
+  },
+  {
+    "title": "Design a Ride-Hailing Service",
+    "slug": "design-ride-hailing",
+    "category": "system_design",
+    "difficulty": "hard",
+    "estimated_minutes": 95,
+    "description": "Geospatial matching, live location tracking and trip state.",
+    "learning_objectives": [
+      "Index locations for nearby-driver queries",
+      "Match drivers without double-assigning",
+      "Track live positions at scale"
+    ],
+    "key_concepts": ["Geohashing", "Matching", "Location Streaming"]
+  },
+  {
+    "title": "Design a Distributed Job Scheduler",
+    "slug": "design-distributed-job-scheduler",
+    "category": "system_design",
+    "difficulty": "hard",
+    "estimated_minutes": 85,
+    "description": "Reliable scheduling with retries, leases and exactly-one execution.",
+    "learning_objectives": [
+      "Prevent duplicate execution of a scheduled job",
+      "Lease work so a dead worker's job is recovered",
+      "Handle misfires and clock skew"
+    ],
+    "key_concepts": ["Leases", "Leader Election", "Retry Policy", "Clock Skew"]
+  },
+  {
+    "title": "Design a Payment / Ledger System",
+    "slug": "design-payment-ledger",
+    "category": "system_design",
+    "difficulty": "hard",
+    "estimated_minutes": 95,
+    "description": "Double-entry accounting, idempotent payments and reconciliation.",
+    "learning_objectives": [
+      "Model money movement as double-entry postings",
+      "Make a payment API safe to retry",
+      "Reconcile internal state against a provider"
+    ],
+    "key_concepts": ["Double-Entry", "Idempotency", "Saga", "Reconciliation"]
+  },
+  {
+    "title": "Design a Search Autocomplete",
+    "slug": "design-search-autocomplete",
+    "category": "system_design",
+    "difficulty": "medium",
+    "estimated_minutes": 75,
+    "description": "Low-latency prefix suggestions built from aggregated query logs.",
+    "learning_objectives": [
+      "Build and serve a prefix index",
+      "Aggregate query logs into ranked suggestions",
+      "Bound tail latency on a hot endpoint"
+    ],
+    "key_concepts": ["Trie", "Top-K", "Aggregation", "Tail Latency"]
+  },
+  {
+    "title": "Design a Collaborative Document Editor",
+    "slug": "design-collaborative-editor",
+    "category": "system_design",
+    "difficulty": "hard",
+    "estimated_minutes": 95,
+    "description": "Concurrent editing with conflict-free merging and offline support.",
+    "learning_objectives": [
+      "Compare operational transforms with CRDTs",
+      "Keep replicas convergent after concurrent edits",
+      "Support offline editing and later merge"
+    ],
+    "key_concepts": ["OT", "CRDT", "Convergence", "Offline Sync"]
+  }
+]

@@ -1,0 +1,33 @@
+# --- dependencies ---
+node_modules/
+.venv/
+venv/
+
+# --- secrets: NEVER commit ---
+.env
+.env.*
+!.env.example
+*.xcconfig
+!**/Secrets.xcconfig.example
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- build output ---
+dist/
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# --- generated artefacts ---
+schema_snapshot.json
+schema_report.md
+
+# --- os ---
+.DS_Store

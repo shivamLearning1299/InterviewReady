@@ -35,12 +35,25 @@ services:
     plan: starter
     region: singapore
     healthCheckPath: /health/ready
-    # Migrations run before the server starts, so a deployment either brings the schema up to
-    # date or fails loudly rather than serving against an outdated schema.
+    # NOTE: there is deliberately NO `dockerCommand` here.
     #
-    # `--workers 2` is explicit here rather than in the Dockerfile: the image is also used for
-    # plain `docker run`, where a single worker is the safer default.
-    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+    # Render was passing the value as an argv array rather than through a shell, so the whole
+    # string was treated as ONE executable name and the deploy died immediately with:
+    #
+    #     sh: 1: alembic upgrade head && uvicorn ...: not found
+    #     ==> Exited with status 127
+    #
+    # 127 is "command not found", and the giveaway is that the message quotes the entire
+    # command line as a single token. Reproduced locally with `docker run <image> '<cmds>'`
+    # producing: exec: "sh -c \"...\"": executable file not found in $PATH
+    #
+    # The image's own CMD already does everything that was needed here — migrations before the
+    # server, `$PORT` handling, and `exec` so signals reach uvicorn:
+    #
+    #     CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+    #
+    # Letting Render use that CMD is both correct and simpler. It also means the deployed
+    # command and `docker run` can no longer diverge, which was the original defect.
     autoDeploy: true
     envVars:
       - key: APP_ENV

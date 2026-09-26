@@ -415,3 +415,42 @@ def test_cors_origins_still_rejects_a_production_wildcard(monkeypatch) -> None:
     )
     with pytest.raises(RuntimeError, match="Wildcard CORS origin is not permitted"):
         create_app(settings)
+
+
+# ----------------------------------------------------------------------- CORS preflight
+# The frontend sends `X-Timezone` on every request (http.ts), and the backend reads it
+# (dependencies.py, alias="X-Timezone"). It was absent from CORS `allow_headers`, so the
+# browser's preflight returned 400 and the request was blocked before it was ever made.
+#
+# This is invisible to curl, which does not preflight a plain GET, and presents in the
+# browser as an opaque "preflight request doesn't pass access control check" — easy to
+# misdiagnose as a network, auth, or proxy fault.
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "authorization",
+        "content-type",
+        "x-request-id",
+        "x-device-id",
+        "x-timezone",
+    ],
+)
+def test_every_custom_header_the_client_sends_is_allowed_by_cors(header: str) -> None:
+    """A header the app reads but CORS omits breaks every request in the browser."""
+    from fastapi.middleware.cors import CORSMiddleware
+
+    from app.core.config import Settings
+    from app.main import create_app
+
+    settings = Settings(
+        DATABASE_URL="postgresql://u:p@h:5432/d",
+        SUPABASE_URL="https://x.supabase.co",
+        CORS_ORIGINS="https://app.example.com",
+    )
+    app = create_app(settings)
+
+    cors = next(m for m in app.user_middleware if m.cls is CORSMiddleware)
+    allowed = {h.lower() for h in cors.kwargs["allow_headers"]}
+    assert header in allowed, f"{header} is sent by the client but not allowed by CORS"

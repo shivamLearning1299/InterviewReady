@@ -179,7 +179,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_origins=settings.cors_origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Device-Id"],
+            # Every custom header the browser is allowed to send must be listed here, or the
+            # preflight fails with 400 and the browser blocks the request before it is made.
+            #
+            # `X-Timezone` was missing while `dependencies.py` reads it as a request header.
+            # The effect was invisible in curl (a plain GET does not preflight) and looked
+            # like a network or auth failure in the browser: the console reported
+            #   "Response to preflight request doesn't pass access control check"
+            # and the request never reached the server at all.
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-Request-ID",
+                "X-Device-Id",
+                "X-Timezone",
+            ],
             expose_headers=["X-Request-ID"],
             max_age=600,
         )

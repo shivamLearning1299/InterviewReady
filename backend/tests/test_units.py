@@ -366,3 +366,52 @@ def test_user_problem_progress_declares_its_check_constraints() -> None:
         "status IN ('not_started','attempted','solved','needs_revision','mastered')"
     )
     assert checks["ck_user_problem_progress_confidence_range"] == "confidence BETWEEN 0 AND 5"
+
+
+# --------------------------------------------------------------------------- CORS parsing
+# `CORS_ORIGINS` is a `list[str]`, and pydantic-settings JSON-decodes complex types from the
+# environment *before* validators run. A comma-separated value is not valid JSON, so the
+# setting raised `SettingsError` and `_split_origins` was never reached — the field could not
+# be configured from the environment at all.
+#
+# It went unnoticed because `.env` does not set CORS_ORIGINS, so the default factory was used.
+# It surfaced only when deploying, where the variable must be set: it would have failed the
+# first production deploy. `Annotated[list[str], NoDecode]` hands the raw string to the
+# validator instead.
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("https://a.example.com,https://b.example.com", ["https://a.example.com", "https://b.example.com"]),
+        ("https://a.example.com", ["https://a.example.com"]),
+        ("https://a.example.com, https://b.example.com", ["https://a.example.com", "https://b.example.com"]),
+        ('["https://a.example.com","https://b.example.com"]', ["https://a.example.com", "https://b.example.com"]),
+        ("", []),
+    ],
+)
+def test_cors_origins_parses_from_the_environment(monkeypatch, raw: str, expected: list[str]) -> None:
+    """Every documented format must work when supplied as an environment variable."""
+    from app.core.config import Settings
+
+    monkeypatch.setenv("CORS_ORIGINS", raw)
+    settings = Settings(
+        DATABASE_URL="postgresql://u:p@h:5432/d",
+        SUPABASE_URL="https://x.supabase.co",
+    )
+    assert settings.cors_origins == expected
+
+
+def test_cors_origins_still_rejects_a_production_wildcard(monkeypatch) -> None:
+    """The deploy guard must survive the parsing change."""
+    from app.core.config import Settings
+    from app.main import create_app
+
+    monkeypatch.setenv("CORS_ORIGINS", "*")
+    settings = Settings(
+        DATABASE_URL="postgresql://u:p@h:5432/d",
+        SUPABASE_URL="https://x.supabase.co",
+        APP_ENV="production",
+    )
+    with pytest.raises(RuntimeError, match="Wildcard CORS origin is not permitted"):
+        create_app(settings)

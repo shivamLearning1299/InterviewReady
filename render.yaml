@@ -1,0 +1,72 @@
+# Render blueprint for the InterviewReady API.
+#
+# This file MUST live at the repository root: Render only reads `render.yaml` from the root
+# of the repo, so the copy in backend/ is not discovered. Paths below are therefore relative
+# to the root, not to backend/.
+#
+# Secrets are declared with `sync: false`, so Render prompts for them in the dashboard rather
+# than expecting them in the repository. Set these before the first deploy:
+#
+#   DATABASE_URL             - Supabase POOLER, port 6543
+#   DATABASE_URL_DIRECT      - Supabase POOLER, port 5432 (migrations)
+#   SUPABASE_URL             - project URL
+#   SUPABASE_PUBLISHABLE_KEY - publishable / anon key
+#   CORS_ORIGINS             - exact frontend origin(s), comma separated. No wildcard.
+#   AI_API_KEY               - optional; without it the tutor returns 503 and everything else works
+#
+# WHY THE POOLER FOR BOTH:
+# `db.<project-ref>.supabase.co` publishes ONLY an AAAA record (verified by DNS query). Render's
+# default networking is IPv4-only, so a service configured against the direct host cannot
+# resolve it — and it fails as a connection error that looks like a credentials problem.
+#
+# WHY THE USERNAME HAS A DOT:
+# The pooler authenticates as `postgres.<project-ref>`, not bare `postgres`. Bare `postgres`
+# is rejected, again presenting as a connection failure.
+#
+# `backend/scripts/pre_deploy_check.py` enforces the first two points locally before you push.
+
+services:
+  - type: web
+    name: interviewready-api
+    runtime: docker
+    # Relative to the repo root.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    region: singapore
+    healthCheckPath: /health/ready
+    # Migrations run before the server starts, so a deployment either brings the schema up to
+    # date or fails loudly rather than serving against an outdated schema.
+    #
+    # `--workers 2` is explicit here rather than in the Dockerfile: the image is also used for
+    # plain `docker run`, where a single worker is the safer default.
+    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_JSON
+        value: "true"
+      - key: AI_PROVIDER
+        value: gemini
+      # Pins the version the test suite runs against; the dependency set is not yet validated
+      # on 3.13+.
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      # Render injects PORT automatically. Declared here so the Dockerfile CMD and this
+      # blueprint are visibly using the same variable rather than one hardcoding 8000.
+      - key: PORT
+        value: "8000"
+      # Secrets: set these in the Render dashboard.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: AI_API_KEY
+        sync: false

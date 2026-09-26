@@ -19,7 +19,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Environment = Literal["development", "staging", "production", "test"]
 AIProviderName = Literal["gemini", "groq", "stub"]
@@ -95,7 +95,24 @@ class Settings(BaseSettings):
     supabase_jwks_cache_seconds: int = 600
 
     # ------------------------------------------------------------------------ cors
-    cors_origins: list[str] = Field(
+    #
+    # `NoDecode` is load-bearing. For a complex type like `list[str]`, pydantic-settings
+    # calls `json.loads()` on the environment value *before* any validator runs. A
+    # comma-separated list is not valid JSON, so the parse raised
+    #
+    #     SettingsError: error parsing value for field "cors_origins"
+    #                              from source "EnvSettingsSource"
+    #
+    # and `_split_origins` below was never reached — the field could not be set from the
+    # environment at all, by any format except a JSON array.
+    #
+    # That went unnoticed locally because `.env` does not define CORS_ORIGINS, so the
+    # default factory was used. It surfaced only when deploying, where the variable must be
+    # set — i.e. it would have failed the first production deploy.
+    #
+    # `NoDecode` hands the raw string to the validator, which accepts comma-separated,
+    # JSON-array, and single-value forms.
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"],
         validation_alias=AliasChoices("CORS_ORIGINS", "cors_origins"),
     )

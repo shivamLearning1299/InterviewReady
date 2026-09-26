@@ -1,0 +1,32 @@
+# Netlify equivalent of vercel.json. Keep the two in sync: whichever platform you pick reads
+# its own file, and a divergence between them is a bug waiting to happen.
+#
+# The SPA rewrite is the load-bearing part. This app uses `BrowserRouter`, so URLs are real
+# paths (`/dsa/two-sum`). Without a rewrite, a hard refresh on any of those returns 404 from
+# the static host — it looks like the app is randomly broken, and only for users who reload.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Everything that is not a real file falls through to index.html so the client router can
+# handle it. `force = false` keeps genuine assets (JS, CSS, images) served directly.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"

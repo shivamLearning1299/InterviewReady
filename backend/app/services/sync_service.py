@@ -29,7 +29,8 @@ from sqlalchemy.exc import IntegrityError
 from app.core.config import Settings
 from app.core.constants import ProblemStatus, SyncChangeOperation, SyncEntity, SyncOperation
 from app.core.logging import get_logger
-from app.repositories.activity import ActivityRepository
+from app.db.models import StudySession
+from app.repositories.activity import ActivityRepository, StudySessionRepository
 from app.repositories.dsa import (
     CodeSnippetRepository,
     ProblemAttemptRepository,
@@ -49,7 +50,8 @@ from app.schemas.sync import (
     SyncPushResponse,
     SyncStatusResponse,
 )
-from app.utils.datetime_utils import utcnow
+from app.services.study_session_service import MAX_SESSION_MINUTES
+from app.utils.datetime_utils import clamp_minutes, utcnow
 
 logger = get_logger(__name__)
 
@@ -87,6 +89,7 @@ class SyncService:
         hld_repo: HLDRepository,
         settings_repo: UserSettingsRepository,
         activity_repo: ActivityRepository,
+        session_repo: StudySessionRepository,
         settings: Settings,
     ) -> None:
         self._sync = sync_repo
@@ -100,12 +103,11 @@ class SyncService:
         self._hld = hld_repo
         self._settings_repo = settings_repo
         self._activity = activity_repo
+        self._sessions = session_repo
         self._settings = settings
 
     # ================================================================== PUSH
-    async def push(
-        self, *, user_id: uuid.UUID, payload: SyncPushRequest
-    ) -> SyncPushResponse:
+    async def push(self, *, user_id: uuid.UUID, payload: SyncPushRequest) -> SyncPushResponse:
         """Apply a batch of queued offline mutations."""
         server_time = utcnow()
         results: list[SyncMutationResult] = []
@@ -163,7 +165,9 @@ class SyncService:
                         status=result.status,
                         result={
                             "version": result.version,
-                            "updated_at": result.updated_at.isoformat() if result.updated_at else None,
+                            "updated_at": result.updated_at.isoformat()
+                            if result.updated_at
+                            else None,
                             "record_id": str(result.record_id) if result.record_id else None,
                         },
                         device_id=payload.device_id,
@@ -265,9 +269,7 @@ class SyncService:
             )
 
         if mutation.operation == SyncOperation.DELETE:
-            return await self._apply_delete(
-                user_id=user_id, mutation=mutation, device_id=device_id
-            )
+            return await self._apply_delete(user_id=user_id, mutation=mutation, device_id=device_id)
 
         return await handler(user_id=user_id, mutation=mutation, device_id=device_id)
 
@@ -283,6 +285,10 @@ class SyncService:
             SyncEntity.HLD_PROGRESS.value: self._upsert_hld_progress,
             SyncEntity.HLD_NOTES.value: self._upsert_hld_notes,
             SyncEntity.USER_SETTINGS.value: self._upsert_settings,
+            # Added to close a gap: SyncEntity declared 11 values but only 10 were
+            # registered, so a client following the published sync contract and pushing a
+            # `study_session` received UNSUPPORTED_ENTITY.
+            SyncEntity.STUDY_SESSION.value: self._upsert_study_session,
         }
 
     # ----------------------------------------------------------- entity handlers
@@ -312,7 +318,11 @@ class SyncService:
             },
         )
 
-        if current is not None and "time_spent_minutes" in values and mutation.operation == SyncOperation.UPSERT:
+        if (
+            current is not None
+            and "time_spent_minutes" in values
+            and mutation.operation == SyncOperation.UPSERT
+        ):
             # Treat the incoming value as authoritative: the offline client already merged
             # its local delta into the total.
             values["time_spent_minutes"] = max(0, int(values["time_spent_minutes"]))
@@ -569,9 +579,7 @@ class SyncService:
                 "revision_count",
             },
         )
-        row = await repo.upsert_progress(
-            user_id=user_id, topic_id=topic_uuid, values=values
-        )
+        row = await repo.upsert_progress(user_id=user_id, topic_id=topic_uuid, values=values)
         await self._record_change(
             user_id=user_id, entity=mutation.entity, record=row, device_id=device_id
         )
@@ -624,6 +632,93 @@ class SyncService:
         )
         return self._applied(mutation, row)
 
+    async def _upsert_study_session(
+        self, *, user_id: uuid.UUID, mutation: SyncMutationPayload, device_id: str | None
+    ) -> SyncMutationResult:
+        """Sync a study session that was created or completed while offline.
+
+        Duration is **server-measured**, exactly as in ``StudySessionService.stop``: the
+        client never supplies ``duration_minutes``. A device clock (or a tampered one)
+        cannot inflate study time, and a backgrounded app cannot over-report.
+
+        Two shapes are accepted, matching the offline reality:
+
+        * **start** — ``started_at`` with no ``ended_at``: the session is still running.
+        * **complete** — ``started_at`` plus ``ended_at``: the elapsed time is derived and
+          folded into ``minutes`` / ``duration_minutes``.
+
+        Uniqueness: a session is identified by its own row id (``record_id``), not by a
+        business key, because two sessions on the same day are legitimate. A replay with
+        the same ``mutation_id`` is already handled by the idempotency ledger before this
+        handler runs.
+        """
+        payload = mutation.payload
+
+        # ---- timezone-aware parsing ------------------------------------------
+        started_at = self._parse_datetime(payload.get("started_at")) or utcnow()
+        ended_at = self._parse_datetime(payload.get("ended_at"))
+
+        # An end before the start is nonsense; clamp rather than reject, so a device with a
+        # skewed clock still drains its queue instead of retrying forever.
+        if ended_at is not None and ended_at < started_at:
+            ended_at = started_at
+
+        session_type = str(payload.get("session_type") or payload.get("area") or "dsa")
+
+        # ---- existing row? (update path) -------------------------------------
+        current: StudySession | None = None
+        if mutation.record_id is not None:
+            current = await self._sessions.find(user_id=user_id, session_id=mutation.record_id)
+
+        conflict = self._conflict_if_stale(mutation=mutation, current=current)
+        if conflict is not None:
+            return conflict
+
+        if current is None:
+            row = await self._sessions.create(
+                user_id=user_id,
+                session_type=session_type,
+                context_id=payload.get("context_id"),
+                context_label=payload.get("context_label"),
+                started_at=started_at,
+                device_id=device_id,
+                # Honour the device-assigned id so the client can correlate its queued row
+                # with the server's, matching every other entity in the sync protocol.
+                session_id=mutation.record_id,
+            )
+        else:
+            row = current
+            row.session_type = session_type
+            # Keep the legacy free-text column mirroring `session_type`.
+            row.area = session_type
+            if payload.get("context_id") is not None:
+                row.context_id = payload["context_id"]
+            if payload.get("context_label") is not None:
+                row.context_label = payload["context_label"]
+            row.started_at = started_at
+            row.date = started_at
+
+        # ---- close it out when the client says the session ended -------------
+        if ended_at is not None:
+            elapsed_seconds = (ended_at - row.started_at).total_seconds()
+            duration = clamp_minutes(elapsed_seconds / 60, maximum=MAX_SESSION_MINUTES)
+            row.ended_at = ended_at
+            row.duration_minutes = duration
+            # `minutes` is NOT NULL on the pre-existing table and must stay authoritative.
+            row.minutes = duration
+
+        if payload.get("note") is not None:
+            row.note = payload["note"]
+
+        row.version = (row.version or 1) + 1
+        row.updated_at = utcnow()
+        await self._sync.session.flush()
+
+        await self._record_change(
+            user_id=user_id, entity=mutation.entity, record=row, device_id=device_id
+        )
+        return self._applied(mutation, row)
+
     async def _upsert_settings(
         self, *, user_id: uuid.UUID, mutation: SyncMutationPayload, device_id: str | None
     ) -> SyncMutationResult:
@@ -670,9 +765,7 @@ class SyncService:
 
         deleted = False
         if mutation.entity == SyncEntity.CODE_SNIPPET.value:
-            deleted = await self._snippets.soft_delete_by_id(
-                user_id=user_id, snippet_id=record_id
-            )
+            deleted = await self._snippets.soft_delete_by_id(user_id=user_id, snippet_id=record_id)
         elif mutation.entity in (SyncEntity.PROBLEM_NOTES.value, SyncEntity.PROBLEM_PROGRESS.value):
             problem_id = self._require_problem_id(mutation)
             if mutation.entity == SyncEntity.PROBLEM_NOTES.value:
@@ -708,6 +801,23 @@ class SyncService:
                 deleted = True
             except Exception:
                 deleted = False
+
+        elif mutation.entity == SyncEntity.STUDY_SESSION.value:
+            # Without this branch an offline session deletion was silently dropped: the
+            # upsert path succeeded, the delete fell through to ``not deleted`` and was
+            # reported as ``skipped_duplicate``, so the row stayed visible forever and the
+            # deletion never propagated to the user's other devices.
+            #
+            # ``find`` rather than ``get`` on purpose: ``get`` raises when the row is
+            # absent, which would be indistinguishable from a real failure here. An absent
+            # row correctly means "already deleted" and should take the existing
+            # ``not deleted`` path below.
+            session_row = await self._sessions.find(user_id=user_id, session_id=record_id)
+            if session_row is not None:
+                session_row.deleted_at = now
+                session_row.version = (session_row.version or 1) + 1
+                await self._sync.session.flush()
+                deleted = True
 
         if not deleted:
             # Already absent. Report success so the client stops retrying this mutation.
@@ -792,7 +902,9 @@ class SyncService:
         )
 
     # ================================================================== STATUS
-    async def status(self, *, user_id: uuid.UUID, device_id: str | None = None) -> SyncStatusResponse:
+    async def status(
+        self, *, user_id: uuid.UUID, device_id: str | None = None
+    ) -> SyncStatusResponse:
         cursor = await self._sync.latest_cursor(user_id=user_id)
         last_change = await self._sync.last_change_at(user_id=user_id)
 
@@ -849,6 +961,30 @@ class SyncService:
         return data
 
     @staticmethod
+    def _parse_datetime(value: Any) -> datetime | None:
+        """Parse a client-supplied ISO-8601 instant, tolerating a naive value.
+
+        Offline clients send whatever their encoder produced. ``datetime.fromisoformat``
+        handles both ``Z`` and ``+00:00`` forms on Python 3.11+; a naive value is pinned to
+        UTC rather than rejected, and an unparseable one returns ``None`` so the caller can
+        fall back to server time instead of failing the whole mutation.
+        """
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            parsed = value
+        else:
+            try:
+                parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                return None
+        if parsed.tzinfo is None:
+            from app.utils.datetime_utils import UTC_TZ
+
+            parsed = parsed.replace(tzinfo=UTC_TZ)
+        return parsed
+
+    @staticmethod
     def _field_filter(payload: dict[str, Any], *, allowed: set[str]) -> dict[str, Any]:
         """Keep only recognised, non-None fields.
 
@@ -857,9 +993,7 @@ class SyncService:
         does not know yet.
         """
         return {
-            key: value
-            for key, value in payload.items()
-            if key in allowed and value is not None
+            key: value for key, value in payload.items() if key in allowed and value is not None
         }
 
     @staticmethod

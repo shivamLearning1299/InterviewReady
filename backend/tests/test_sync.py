@@ -370,3 +370,200 @@ async def test_delete_mutation_is_honoured(client, seeded_catalog) -> None:
     await push(client, mutation(entity="code_snippet", operation="delete", record_id=record))
     response = await client.get("/api/v1/dsa/problems/two-sum/code")
     assert response.status_code == 200
+
+
+# ------------------------------------------------------------------------- study_session
+# `SyncEntity` declared 11 values but only 10 were registered in `_handlers()`, so a
+# client following the published sync contract and pushing a `study_session` was answered
+# with UNSUPPORTED_ENTITY. These tests pin the handler that closed that gap — and pin the
+# security property that matters most about it: the duration is server-measured, so a
+# device clock cannot inflate recorded study time.
+
+
+async def test_study_session_entity_is_supported(client, seeded_catalog) -> None:
+    """The regression test for the missing handler."""
+    response = await push(
+        client,
+        mutation(
+            entity="study_session",
+            payload={
+                "session_type": "dsa",
+                "started_at": "2026-01-01T10:00:00+00:00",
+                "ended_at": "2026-01-01T10:30:00+00:00",
+            },
+            record_id=uuid.uuid4(),
+        ),
+    )
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["status"] == "applied", result
+    assert result["error_code"] is None
+
+
+async def test_study_session_derives_duration_from_the_server_clock(
+    client, seeded_catalog
+) -> None:
+    """A client-supplied duration must be ignored entirely."""
+    response = await push(
+        client,
+        mutation(
+            entity="study_session",
+            payload={
+                "session_type": "dsa",
+                "started_at": "2026-01-01T10:00:00+00:00",
+                "ended_at": "2026-01-01T10:45:00+00:00",
+                # A lying client. Must not be honoured.
+                "duration_minutes": 9999,
+                "minutes": 9999,
+            },
+            record_id=uuid.uuid4(),
+        ),
+    )
+    assert response.status_code == 200
+    assert response.json()["results"][0]["status"] == "applied"
+
+    listed = await client.get("/api/v1/study-sessions")
+    assert listed.status_code == 200
+    sessions = listed.json()["items"]
+    assert len(sessions) == 1
+    # 45 real minutes, not the 9999 the client asked for.
+    assert sessions[0]["duration_minutes"] == 45
+
+
+async def test_study_session_duration_is_clamped(client, seeded_catalog) -> None:
+    """An implausibly long session is clamped, mirroring StudySessionService.stop."""
+    response = await push(
+        client,
+        mutation(
+            entity="study_session",
+            payload={
+                "session_type": "dsa",
+                "started_at": "2026-01-01T00:00:00+00:00",
+                "ended_at": "2026-01-05T00:00:00+00:00",  # 4 days
+            },
+            record_id=uuid.uuid4(),
+        ),
+    )
+    assert response.status_code == 200
+    applied = response.json()["results"][0]
+    assert applied["status"] == "applied"
+
+    listed = await client.get("/api/v1/study-sessions")
+    # MAX_SESSION_MINUTES is 8 hours.
+    assert listed.json()["items"][0]["duration_minutes"] == 8 * 60
+
+
+async def test_study_session_with_no_end_time_stays_running(client, seeded_catalog) -> None:
+    """A session pushed without `ended_at` is an open session, not a rejected mutation."""
+    response = await push(
+        client,
+        mutation(
+            entity="study_session",
+            payload={"session_type": "hld", "started_at": "2026-01-01T10:00:00+00:00"},
+            record_id=uuid.uuid4(),
+        ),
+    )
+    assert response.status_code == 200
+    assert response.json()["results"][0]["status"] == "applied"
+
+    running = await client.get("/api/v1/study-sessions/running")
+    assert running.status_code == 200
+    assert running.json() is not None
+    assert running.json()["session_type"] == "hld"
+
+
+async def test_study_session_with_an_end_before_the_start_is_clamped(
+    client, seeded_catalog
+) -> None:
+    """A skewed device clock must not wedge the queue with an endless rejection."""
+    response = await push(
+        client,
+        mutation(
+            entity="study_session",
+            payload={
+                "session_type": "dsa",
+                "started_at": "2026-01-01T10:00:00+00:00",
+                "ended_at": "2026-01-01T09:00:00+00:00",  # an hour BEFORE the start
+            },
+            record_id=uuid.uuid4(),
+        ),
+    )
+    assert response.status_code == 200
+    assert response.json()["results"][0]["status"] == "applied"
+
+    listed = await client.get("/api/v1/study-sessions")
+    # Clamped to zero rather than negative.
+    assert listed.json()["items"][0]["duration_minutes"] == 0
+
+
+async def test_study_session_appears_in_the_pull_stream(client, seeded_catalog) -> None:
+    """A pushed session must propagate to the user's other devices."""
+    session_id = uuid.uuid4()
+    await push(
+        client,
+        mutation(
+            entity="study_session",
+            payload={
+                "session_type": "dsa",
+                "started_at": "2026-01-01T10:00:00+00:00",
+                "ended_at": "2026-01-01T10:20:00+00:00",
+            },
+            record_id=session_id,
+        ),
+    )
+
+    pulled = await client.get("/api/v1/sync/pull", params={"cursor": 0})
+    assert pulled.status_code == 200
+    changes = pulled.json()["changes"]
+    assert any(
+        c["entity"] == "study_session" and c["record_id"] == str(session_id) for c in changes
+    ), changes
+
+
+async def test_study_session_delete_is_honoured(client, seeded_catalog) -> None:
+    """An offline session deletion must tombstone and propagate.
+
+    Regression test for a gap found by independent verification: the upsert path for
+    ``study_session`` existed but ``_apply_delete`` had no branch for it, so a delete was
+    silently reported as ``skipped_duplicate`` while the row stayed visible forever.
+    """
+    session_id = uuid.uuid4()
+    await push(
+        client,
+        mutation(
+            entity="study_session",
+            payload={"session_type": "dsa", "started_at": "2026-01-01T10:00:00+00:00"},
+            record_id=session_id,
+        ),
+    )
+    assert (await client.get("/api/v1/study-sessions")).json()["items"], "session not created"
+
+    deleted = await push(
+        client, mutation(entity="study_session", operation="delete", record_id=session_id)
+    )
+    result = deleted.json()["results"][0]
+    assert result["status"] == "applied", result
+
+    # Gone from the read API.
+    assert (await client.get("/api/v1/study-sessions")).json()["items"] == []
+
+    # And a tombstone reached the change feed, so other devices learn about it.
+    changes = (await client.get("/api/v1/sync/pull", params={"cursor": 0})).json()["changes"]
+    tombstones = [
+        c
+        for c in changes
+        if c["entity"] == "study_session"
+        and c["record_id"] == str(session_id)
+        and c["operation"] == "delete"
+    ]
+    assert tombstones, changes
+
+
+async def test_deleting_an_absent_study_session_is_idempotent(client, seeded_catalog) -> None:
+    """Replaying a delete for a row that was never created must not fail the batch."""
+    response = await push(
+        client,
+        mutation(entity="study_session", operation="delete", record_id=uuid.uuid4()),
+    )
+    assert response.status_code == 200
+    assert response.json()["results"][0]["status"] == "skipped_duplicate"

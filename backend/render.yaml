@@ -44,5 +44,9 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      # Render injects PORT automatically; declared here so the Dockerfile CMD and this
+      # blueprint are visibly using the same variable rather than one hardcoding 8000.
+      - key: PORT
+        value: "8000"
       - key: PYTHON_VERSION
         value: "3.12.7"

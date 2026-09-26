@@ -54,9 +54,17 @@ Rules:
 }
 ```
 
-`page_context` is the **new optional additive field**. `context_type` / `context_id` / `action`
-/ `selected_code` / `snippet_id` / `conversation_id` / `include_history` are unchanged, so
-existing React calls keep working.
+`page_context` is the **new optional additive field**. `context_type` / `action` /
+`selected_code` / `snippet_id` / `conversation_id` / `include_history` are unchanged, so existing
+React calls keep working.
+
+`context_id` is a **string**, not a UUID (`str | None`, `max_length=300` in
+`app/schemas/ai.py::AIChatRequest`; `String(300)` on `ai_conversations.context_id`). It carries
+either a **DSA problem slug** (e.g. `"two-sum"`, `"subarray-sum-equals-k"`) or an **LLD/HLD topic
+UUID**. It is text because `dsa_problems.id` is the problem slug — a TEXT primary key — so a UUID
+column could never address a DSA problem; migration `0005_ai_context_id_text` widened the column
+`uuid → text` to make the DSA tutor work. The same rule governs `PageContext.entity_id` in §1:
+DSA is a slug, LLD/HLD is a UUID, and both go on the wire as strings.
 
 ### Response — `POST /api/v1/ai/chat`
 
@@ -168,8 +176,12 @@ Already implemented and frozen. iOS must adopt it as-is.
 * `base_version` mismatch → `conflict`, and the **server's current record** is returned in
   `server_record` so the client merges instead of blindly retrying.
 * Cursor is the server's `sync_changes.seq` (bigint identity). **Never** a device timestamp.
-* Entities: `problem_progress`, `problem_attempt`, `problem_notes`, `code_snippet`, `revision`,
+* Entities (11 of 11 now have a handler — `study_session` is genuinely supported):
+  `problem_progress`, `problem_attempt`, `problem_notes`, `code_snippet`, `revision`,
   `lld_progress`, `lld_notes`, `hld_progress`, `hld_notes`, `study_session`, `user_settings`.
+  `SyncEntity` declares 11 values and `SyncService._handlers()` registers all 11; the earlier
+  state — `study_session` declared but unhandled, so a push returned `UNSUPPORTED_ENTITY` — is
+  fixed by `_upsert_study_session` (start/complete shapes, server-measured duration).
 
 Note: `design_topics` is deliberately **not** an entity. iOS's `DesignTopic` must be remapped to
 the `lld_*` / `hld_*` entities.
@@ -197,7 +209,11 @@ knowledge_chunks (
 * Retrieval: `WHERE user_id IS NULL OR user_id = :current_user` — a user's vectors are never
   returned to another user.
 * Unique on `(source_type, source_id, section, coalesce(user_id, '00000000-…'))` to prevent
-  duplicate chunks; `content_hash` short-circuits re-embedding.
+  duplicate chunks; `content_hash` short-circuits re-embedding. **PostgreSQL 17+**: this is
+  realised as two partial unique indexes over the raw `user_id` column, with
+  `ON CONFLICT (source_type, source_id, section, user_id) WHERE user_id IS [NOT] NULL` — see
+  CN-007. No extra column is added. A portable `user_bucket`-style alternative for PG < 17
+  is also described in CN-007.
 * Cosine similarity. Exact search first; add HNSW + `vector_cosine_ops` only when latency
   demands it.
 
@@ -217,9 +233,11 @@ query ─┬─ pgvector cosine top-K
 ### Embed vs never embed
 
 **Embed:** concept explanations, patterns, the user's approach/mistakes/learnings/revision notes,
-LLD design decisions + responsibilities + patterns + tradeoffs, HLD requirements / data model /
-database choice / caching / scaling / queues / failure handling / tradeoffs, and occasional
-conversation summaries.
+LLD design decisions + responsibilities + patterns + tradeoffs, all **15** `hld_notes` text
+fields — `functional_requirements`, `non_functional_requirements`, `capacity_estimation`,
+`apis`, `data_model`, `high_level_architecture`, `database_choice`, `caching`, `queues`,
+`scaling`, `failure_handling`, `tradeoffs`, `final_notes`, `interview_notes`, `mistakes` — and
+occasional conversation summaries.
 
 **Never embed:** status, attempts, confidence, dates, streak, progress %, revision-due dates,
 study minutes, raw DB metadata, and every individual chat message.
@@ -234,6 +252,10 @@ already-separated structured fields.**
 
 * `ai_conversations` + `ai_messages` hold the transcript.
 * New additive column `ai_conversations.conversation_summary` (text, null).
+* New additive columns `ai_conversations.summary_watermark_message_id` (uuid, null) and
+  `ai_conversations.summary_version` (int, not null, default 0). The summary's position and
+  generation count are recorded explicitly; a stored timestamp alone is not sufficient — see
+  CN-008.
 * Prompt context = summary + last 8–12 relevant messages. Never the whole history.
 * The LLM is never the source of truth for prior API calls.
 
@@ -248,3 +270,95 @@ already-separated structured fields.**
 ```
 
 Never send the user's entire database.
+
+
+## Contract change notes
+
+### CN-007 — `knowledge_chunks` dedupe uses partial unique indexes, not a `user_bucket` column
+```
+WHAT CHANGED   §6's dedupe key (source_type, source_id, section, coalesce(user_id, sentinel))
+               is realised as TWO partial unique indexes on the raw user_id column:
+                 CREATE UNIQUE INDEX uq_knowledge_chunks_global
+                   ON knowledge_chunks (source_type, source_id, section)
+                   WHERE user_id IS NULL;
+                 CREATE UNIQUE INDEX uq_knowledge_chunks_user
+                   ON knowledge_chunks (source_type, source_id, section, user_id)
+                   WHERE user_id IS NOT NULL;
+               and the upsert targets them with, per partition,
+                 ON CONFLICT (source_type, source_id, section) WHERE user_id IS NULL
+                 ON CONFLICT (source_type, source_id, section, user_id) WHERE user_id IS NOT NULL
+               The proposal's knowledge_chunks.user_bucket uuid GENERATED ALWAYS AS (...)
+               STORED column is REJECTED and is not part of the contract.
+WHY            Executable compilation on SQLAlchemy 2.0.54 proves an expression index is not
+               needed. str(stmt.compile(dialect=postgresql.dialect())) emits the COALESCE
+               target verbatim, and the index_where= form emits both partial targets verbatim:
+                 ON CONFLICT (source_type, source_id, section, user_id) WHERE user_id IS NULL
+                 ON CONFLICT (source_type, source_id, section, user_id) WHERE user_id IS NOT NULL
+               Each matches its partial unique index exactly, so PostgreSQL infers it and no
+               hand-written constraint= fallback (nor any DDL drift) is required. The
+               generated column additionally costs 16 B/row on every row of every read path
+               to solve a problem that exists on one write path, and it changes the table's
+               visible shape for every future reader. (It was never unsound: SQLAlchemy omits
+               Computed columns from the INSERT column list, verified.)
+BACKWARD COMPATIBLE?   yes — §6 gains no column and no table change; the dedupe semantics are
+               identical to the frozen key. Only the index realisation is pinned.
+AFFECTED CLIENTS       backend, AI (indexer). No wire change; React and iOS are unaffected.
+REQUIRED MIGRATION     In 0004, create the two partial unique indexes above instead of
+               uq_knowledge_chunks_identity, and run the §5.5 dedupe DELETE before creating
+               them. Upsert call sites pass index_where per partition; index_elements must
+               include user_id whenever index_where is set (a bare
+               index_elements=[source_type, source_id, section] + index_where=... compiles but
+               omits user_id from the inferred target).
+               PORTABILITY: partial-index inference in ON CONFLICT requires PostgreSQL 17+.
+               If the deployment is PG < 17, the portable fallback is the proposal's
+               user_bucket column (now permitted here as a documented alternative, never as a
+               requirement) or a constraint="uq_..." target; that choice must be recorded in
+               06-migration-plan.md before 0004 is written.
+```
+
+### CN-008 — conversation-memory watermark columns added to `ai_conversations`
+```
+WHAT CHANGED   ai_conversations gains summary_watermark_message_id (uuid, null) and
+               summary_version (int, not null, default 0), alongside the already-frozen
+               conversation_summary (text, null).
+WHY            The summary's coverage boundary must be an opaque message ID, not a timestamp.
+               AIMessage is soft-deleted and can be replayed; created_at ties in the same
+               transaction / on a replayed turn, so "messages with created_at > watermark"
+               can drop an unseen turn (ties) or silently shrink the window when the
+               watermark message itself is soft-deleted (every remaining message now sorts
+               before it, so the window empties and early turns are lost with no summary
+               covering them). A monotonic message ID makes the boundary stable under both.
+               summary_version makes "the summary lags the transcript" observable, so a
+               failed regeneration is detectable rather than a silent double-count.
+BACKWARD COMPATIBLE?   yes — two additive nullable/defaulted columns; no existing client reads
+               ai_conversations directly.
+AFFECTED CLIENTS       backend, AI
+REQUIRED MIGRATION     Add both columns in 0004. Backfill: leave the watermark NULL and
+               summary_version at 0 for existing conversations (NULL means "summarise the
+               whole thread"). Window predicate becomes
+               `id <= summary_watermark_message_id` over an ordered, soft-delete-stable
+               message ordering; the summary call is triggered by message count / token
+               thresholds only, never by a timestamp comparison.
+```
+
+### CN-009 — §6 HLD embeddable field count corrected 13 → 15
+```
+WHAT CHANGED   §6 "Embed vs never embed" now names all 15 HLD text fields instead of
+               implying 13.
+WHY            05-contract-ai.md §6 said 13; the implementation spec said 15. The model is
+               authoritative: backend/app/db/models/hld.py HLDNote defines 15 Mapped[str]
+               Text fields — functional_requirements, non_functional_requirements,
+               capacity_estimation, apis, data_model, high_level_architecture,
+               database_choice, caching, queues, scaling, failure_handling, tradeoffs,
+               final_notes, interview_notes, mistakes. The 13 are the design sections; the
+               last two (interview_notes, mistakes) are reflective fields attached after
+               them and are equally embeddable. The docstring's own "13-section design
+               document" is a naming artefact, not a field count. Consequence: HLD chunk
+               volume is up to 15 per topic (not 13), which the spec's storage budget
+               already assumes.
+BACKWARD COMPATIBLE?   yes — documentation and chunk-count correction only; no schema or wire
+               change.
+AFFECTED CLIENTS       backend, AI
+REQUIRED MIGRATION     none. 09-ai-implementation-spec.md is already consistent; it is frozen
+               as written and must not be edited.
+```

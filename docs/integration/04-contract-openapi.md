@@ -40,14 +40,31 @@ Status: **frozen**. Changes require a contract change note (see `00-README.md`).
 
 ### Endpoints the brief did not list but that exist — keep them
 
+Verified against a live `app.openapi()` dump (55 paths), not against the brief.
+
 `GET /api/v1/dsa/topics`, `/dsa/filters`, `PATCH /dsa/problems/{id}/attempts/{attempt_id}`,
 `GET /api/v1/revisions/summary`, `POST /api/v1/revisions/promote-stale`,
 `GET /api/v1/today/explain`, `PATCH/DELETE /api/v1/daily-plans/items/{item_id}`,
 `GET /api/v1/stats/streak`, `/stats/mastery`,
 `GET /api/v1/study-sessions`, `/study-sessions/running`,
 `GET /api/v1/ai/actions` (returns the action *menu*), `DELETE /ai/conversations/{id}`,
-`GET /api/v1/sync/status`, `GET /api/v1/users/export`,
-`GET/PUT /api/v1/lld/{id}/code`, `/hld/{id}/code`.
+`GET /api/v1/sync/status`, `GET /api/v1/export`,
+`GET/POST/PUT/DELETE /api/v1/lld/{topic_id}/code`, `/hld/{topic_id}/code`.
+
+**Route-list corrections (independent review V-01 / V-02).** Both flags were re-verified
+against the live OpenAPI route table; the outcome is *mixed*, so both lines are corrected to
+what the code actually serves:
+
+* `GET /api/v1/users/export` → **the path is wrong, the endpoint is real.** `app/api/v1/users.py`
+  declares the handler with `@router.get("/export")` inside a prefix-less router
+  (`router = APIRouter()`, mounted at `settings.api_v1_prefix = "/api/v1"`), so the served path
+  is **`GET /api/v1/export`**, not `GET /api/v1/users/export`. The old path would 404. The
+  endpoint itself exists (`operationId: export_data_api_v1_export_get`).
+* `GET /api/v1/lld/{id}/code` / `/hld/{id}/code` → **these DO exist.** `app/api/v1/lld.py` and
+  `app/api/v1/hld.py` each carry `@router.get("/{topic_id}/code")` plus `POST`, and
+  `PUT/DELETE /{topic_id}/code/{snippet_id}`, on routers prefixed `/lld` and `/hld`. The
+  review's "no `/code` route" claim is falsified; the only correction needed is the parameter
+  name (`{id}` → `{topic_id}`), which is what the line above now shows.
 
 **Decision:** preserve every working path. `GET /ai/actions` keeps returning the static action
 menu (renaming it would break React); the new `POST /ai/actions/{id}/execute` operates on a
@@ -73,6 +90,34 @@ Authorization: Bearer <supabase_access_token>
 
 Handler-level translation turns PostgreSQL `IntegrityError` constraint names into specific
 API codes. Sync results additionally carry per-mutation `status`, `error_code` and `message`.
+
+## 3.1 AI chat identifiers and the sync entity set
+
+**`context_id` is a STRING, never a UUID.** On `POST /api/v1/ai/chat` (request schema
+`app/schemas/ai.py::AIChatRequest`) it is typed `str | None` with `max_length=300`, and the
+column `ai_conversations.context_id` is `String(300)` (`app/db/models/ai.py`). It holds either a
+**DSA problem slug** (e.g. `"two-sum"`, `"subarray-sum-equals-k"`) or an **LLD/HLD topic UUID**.
+It is text, not UUID, because `dsa_problems.id` is itself a slug — a TEXT primary key — so the DSA
+tutor path would otherwise be impossible (the client sends `"two-sum"`, which no UUID column
+accepts). Migration `0005_ai_context_id_text` widened the column from `uuid` to `text` for exactly
+this reason; treating `context_id` as a UUID in client code will break every DSA request.
+
+The same applies to `PageContext.entity_id` in `05-contract-ai.md` §1: DSA ids are slugs,
+LLD/HLD ids are UUIDs, and the wire type is a string in both cases.
+
+**Sync entities — `study_session` is genuinely supported (verified, not assumed).**
+`SyncEntity` (`app/core/constants.py`) declares **11** values, and `SyncService._handlers()`
+(`app/services/sync_service.py`) now registers a handler for **all 11**:
+
+`problem_progress`, `problem_notes`, `code_snippet`, `problem_attempt`, `revision`,
+`lld_progress`, `lld_notes`, `hld_progress`, `hld_notes`, `user_settings`, **`study_session`**.
+
+`study_session` was previously declared in the enum but had no handler, so a client following the
+published contract and pushing one received `UNSUPPORTED_ENTITY`. That gap is closed by
+`_upsert_study_session`, which accepts both a *start* shape (`started_at`, no `ended_at`) and a
+*complete* shape (`started_at` + `ended_at`) and derives duration server-side via
+`clamp_minutes`. The adoptable-entity count is therefore **11 of 11**, not 11 declared with 10
+implemented.
 
 ## 4. Middleware
 

@@ -14,8 +14,13 @@ from app.schemas.common import TimestampedModel
 
 class AIChatRequest(BaseModel):
     context_type: AIContextType = AIContextType.GENERAL
-    context_id: uuid.UUID | None = Field(
-        default=None, description="Problem id (dsa) or topic id (lld/hld)."
+    context_id: str | None = Field(
+        default=None,
+        max_length=300,
+        description=(
+            "DSA problem slug (e.g. 'two-sum') or an LLD/HLD topic UUID. "
+            "Stored as text because the DSA catalog's primary key is its slug."
+        ),
     )
     message: str = Field(min_length=1, max_length=8_000)
     action: AIAction = AIAction.GENERAL
@@ -55,7 +60,7 @@ class AIChatResponse(BaseModel):
 class AIConversationSummary(TimestampedModel):
     title: str | None = None
     context_type: str
-    context_id: uuid.UUID | None = None
+    context_id: str | None = None
     context_label: str | None = None
     provider: str | None = None
     model: str | None = None

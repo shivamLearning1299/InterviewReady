@@ -48,7 +48,13 @@ class AIConversation(UUIDPrimaryKeyMixin, TimestampMixin, VersionMixin, SoftDele
         String(20), nullable=False, server_default=text("'general'")
     )
     # Deliberately not FK-constrained: the target table varies with ``context_type``.
-    context_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    #
+    # TEXT, not UUID. `dsa_problems.id` is the problem SLUG (a TEXT primary key), while LLD
+    # and HLD topics use UUIDs. Typing this column as UUID made the DSA tutor path
+    # impossible: the client sends `context_id="two-sum"`, Pydantic rejected it with a 422
+    # before it ever reached the service, and the service's DSA branch already treats the
+    # value as `str(context_id)`. TEXT accepts both shapes.
+    context_id: Mapped[str | None] = mapped_column(String(300), nullable=True)
     context_label: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     provider: Mapped[str | None] = mapped_column(String(40), nullable=True)

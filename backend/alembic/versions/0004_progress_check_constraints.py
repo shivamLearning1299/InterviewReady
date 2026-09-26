@@ -87,9 +87,21 @@ def _constraint_exists(name: str) -> bool:
 
 
 def _create_check_constraint_if_missing(name: str, condition: str) -> None:
+    """Create the constraint under exactly the name the ORM declares.
+
+    ``op.create_check_constraint`` runs the target metadata's naming convention
+    (``ck_%(table_name)s_%(constraint_name)s``) over whatever it is given. Passing an
+    already-qualified name therefore double-prefixes it, producing
+    ``ck_user_problem_progress_ck_user_problem_progress_confidence_range`` — a name that
+    does not match the model and that Alembic's autogenerate would then report as drift
+    forever.
+
+    Wrapping the name in ``op.f()`` marks it as final, so the convention is not applied a
+    second time.
+    """
     if _constraint_exists(name):
         return
-    op.create_check_constraint(name, TABLE, condition)
+    op.create_check_constraint(op.f(name), TABLE, condition)
 
 
 # ---------------------------------------------------------------------------------------

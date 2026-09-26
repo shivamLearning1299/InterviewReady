@@ -55,7 +55,14 @@ export interface PageDraftInput {
 export interface BuildPageContextInput extends PageDraftInput {
   pageType: PageType;
   entityType: EntityType;
-  /** DSA: the problem slug. LLD/HLD: the topic UUID. */
+  /**
+   * DSA: the problem **slug** (e.g. `'two-sum'`), never a UUID. LLD/HLD: the topic UUID.
+   *
+   * The DSA catalog is keyed by slug (`dsa_problems.id TEXT`), so the slug is the id —
+   * it just does not look like one. Do not substitute `problem.id` in a consumer that
+   * expects a UUID, or vice versa: `AIChatRequest.context_id` is a `str` that accepts
+   * both shapes server-side, which is why a mismatch fails silently instead of loudly.
+   */
   entityId?: string | null;
 }
 

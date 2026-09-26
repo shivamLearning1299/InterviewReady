@@ -269,14 +269,14 @@ class AITutorService:
         """Assemble the minimal context for the request."""
         context = TutorContext(
             context_type=conversation.context_type,
-            context_id=str(conversation.context_id) if conversation.context_id else None,
+            context_id=conversation.context_id,
             context_label=conversation.context_label,
         )
 
         context_id = conversation.context_id
 
         if conversation.context_type == AIContextType.DSA.value and context_id is not None:
-            problem_id = str(context_id)
+            problem_id = context_id
             try:
                 problem, progress = await self._catalog.get_with_progress(
                     user_id=user_id, problem_id=problem_id
@@ -376,20 +376,34 @@ class AITutorService:
         return primary.code[:MAX_CODE_CHARS]
 
     async def _resolve_context_label(
-        self, *, user_id: uuid.UUID, context_type: str, context_id: uuid.UUID | None
+        self, *, user_id: uuid.UUID, context_type: str, context_id: str | None
     ) -> str | None:
+        """Human-readable label for a conversation's context, or ``None``.
+
+        ``context_id`` is TEXT, not a UUID: it holds a DSA problem **slug** for
+        ``context_type='dsa'`` and a topic UUID (as text) for LLD/HLD. The annotation here
+        previously said ``uuid.UUID | None`` while every caller passed a ``str``; it
+        happened to work because SQLAlchemy bound the value and Postgres cast it, so the
+        mismatch only surfaced as a driver ``DataError`` on a malformed value instead of
+        being caught at the boundary. Typed honestly now.
+        """
         if context_id is None:
             return None
         try:
             if context_type == AIContextType.DSA.value:
-                problems = await self._catalog.get_by_ids([str(context_id)])
-                problem = problems.get(str(context_id))
+                # Already a slug — no cast needed.
+                problems = await self._catalog.get_by_ids([context_id])
+                problem = problems.get(context_id)
                 return problem.title if problem else None
             if context_type == AIContextType.LLD.value:
-                topic, _ = await self._lld.get_with_progress(user_id=user_id, topic_id=context_id)
+                topic, _ = await self._lld.get_with_progress(
+                    user_id=user_id, topic_id=uuid.UUID(context_id)
+                )
                 return topic.title
             if context_type == AIContextType.HLD.value:
-                topic, _ = await self._hld.get_with_progress(user_id=user_id, topic_id=context_id)
+                topic, _ = await self._hld.get_with_progress(
+                    user_id=user_id, topic_id=uuid.UUID(context_id)
+                )
                 return topic.title
         except Exception:
             return None

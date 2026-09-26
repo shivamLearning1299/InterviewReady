@@ -31,6 +31,24 @@ class StudySessionRepository:
             raise StudySessionNotFoundError()
         return session_row
 
+    async def find(
+        self, *, user_id: uuid.UUID, session_id: uuid.UUID
+    ) -> StudySession | None:
+        """Look up a session without raising when it is absent.
+
+        ``get`` raises ``StudySessionNotFoundError``, which is right for a REST endpoint
+        where a missing row is a 404. The sync handler needs the opposite: an upsert has to
+        distinguish "create" from "update", and a fresh create has no existing row. Using
+        ``get`` there would turn every insert into a rejection.
+        """
+        return await self.session.scalar(
+            select(StudySession).where(
+                StudySession.id == session_id,
+                StudySession.user_id == user_id,
+                StudySession.deleted_at.is_(None),
+            )
+        )
+
     async def get_running(self, *, user_id: uuid.UUID) -> StudySession | None:
         """The user's currently running session, if any.
 
@@ -56,6 +74,7 @@ class StudySessionRepository:
         context_label: str | None = None,
         started_at: datetime | None = None,
         device_id: str | None = None,
+        session_id: uuid.UUID | None = None,
     ) -> StudySession:
         """Open a new session.
 
@@ -66,6 +85,12 @@ class StudySessionRepository:
         """
         start = started_at or utcnow()
         session_row = StudySession(
+            # A session queued offline already has an id assigned by the device. Honouring
+            # it is what lets the client correlate its local row with the server's after a
+            # push (see `UUIDPrimaryKeyMixin`: ids are generated client-side precisely so
+            # offline devices can pre-assign them). Without this the server would mint a
+            # new id and the client could never match the two.
+            **({"id": session_id} if session_id is not None else {}),
             user_id=user_id,
             session_type=session_type,
             area=session_type,

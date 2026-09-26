@@ -6,11 +6,30 @@ reliability, **(7)** maintainability, **(8)** performance.
 
 Status: Phases 1–2 complete. Phases 3–7 not started.
 
+### Alembic revision chain (applied order — source of truth: `backend/alembic/versions/`)
+
+| Revision | File | Contents | State |
+|---|---|---|---|
+| `0001_existing_schema_adaptation` | `0001_existing_schema_adaptation.py` | Baseline: additive adaptation of the pre-existing Supabase schema | applied |
+| `0002_new_tables` | `0002_new_tables_..._topics_and_analytics_.py` | New tables for planning, sync, AI, topics and analytics | applied |
+| `0003_progress_status_default` | `0003_progress_status_default.py` | Default for `user_problem_progress.status` | applied |
+| `0004_progress_check_constraints` | `0004_progress_check_constraints.py` | The two missing `user_problem_progress` CHECK constraints (+ data repair) — see §3.5 | **exists, verified on real Postgres** |
+| `0005_ai_context_id_text` | `0005_ai_context_id_text.py` | Widen `ai_conversations.context_id` `uuid → text` for the DSA slug path | **exists** |
+
+The chain is linear: `0001 → 0002 → 0003 → 0004_progress_check_constraints → 0005_ai_context_id_text`
+(`0005` sets `down_revision = "0004_progress_check_constraints"`).
+
+**Naming collision to resolve before the AI/RAG work.** The AI/RAG migration planned in §3.1 and
+CN-004 is *also* referred to as "migration 0004" in this document and in `09-ai-implementation-spec.md`.
+The identifier `0004` is now taken by `0004_progress_check_constraints`, so the AI/RAG migration must
+be re-numbered to **`0006`** (or later) when it is written, and its `down_revision` set to
+`0005_ai_context_id_text`. No AI/RAG migration file exists today.
+
 ---
 
 ## Phase 3 — Backend stabilization (Agent 2)
 
-### 3.1 Additive migration `0004` — AI/RAG foundation
+### 3.1 Additive migration (planned as `0006`; was mis-numbered `0004`) — AI/RAG foundation
 * `CREATE EXTENSION IF NOT EXISTS vector`
 * `knowledge_chunks` per `05-contract-ai.md` §6, with the dedupe unique index.
 * Additive columns: `ai_conversations.conversation_summary text`,
@@ -37,9 +56,28 @@ Additive `page_context` on the chat request and `actions` on the chat response.
   rejected, invalid enum value rejected, stale `version` rejected.
 * Streaming: terminates with exactly one `done`/`error`.
 
-### 3.5 Deferred (documented, not now)
-Creating the declared-but-missing CHECK constraints on the five adapted tables — **blocked on
-3.0 below**; creating them first would make currently-acceptable iOS writes start failing.
+### 3.5 CHECK constraints — DONE and verified (was "deferred/blocked")
+The declared-but-missing CHECK constraints on `user_problem_progress` are **no longer deferred
+and no longer blocked**. Migration **`0004_progress_check_constraints`** creates them, and it has
+been run and verified against a **real Postgres** instance:
+
+* `ck_user_problem_progress_status_valid` — `status IN ('not_started','attempted','solved',
+  'needs_revision','mastered')`, exactly the predicate and name `app/db/models/dsa.py` declares
+  (created through `op.f()` so the metadata naming convention is not applied twice).
+* `ck_user_problem_progress_confidence_range` — `confidence BETWEEN 0 AND 5`.
+
+The migration first repairs pre-existing data (`notStarted → not_started`,
+`needsRevision → needs_revision`, anything else off-vocabulary → `not_started`, confidence
+clamped to 0–5), so the `ALTER TABLE` cannot fail on rows already written by the old iOS client.
+This resolves the self-contradiction between §3.0 (which ordered the constraint created) and the
+previous text here (which called it deferred/blocked): §3.0 was right, and 0004 delivers it.
+
+**The ordering caveat still stands.** 0004 must be applied to a LIVE database only *after* every
+writing client has been corrected to emit the canonical enum values (Phase 3.0 item 1, the iOS
+`ProblemStatus` raw-value change). Applied while a client still writes `"notStarted"`, the
+constraint turns currently-succeeding writes into production `IntegrityError`s instead of client
+validation messages. The data repair inside 0004 makes *existing* rows valid; only client
+behaviour keeps new rows valid.
 
 ---
 
@@ -205,7 +243,9 @@ REQUIRED MIGRATION     none.
 
 ### CN-004 — `knowledge_chunks` table + pgvector
 ```
-WHAT CHANGED   New table knowledge_chunks with vector(768); new migration 0004.
+WHAT CHANGED   New table knowledge_chunks with vector(768); new migration (re-numbered
+               0006 — the id 0004 is taken by 0004_progress_check_constraints; see the
+               revision chain above).
 WHY            Hybrid retrieval for the contextual tutor.
 BACKWARD COMPATIBLE?   yes — additive table, no existing table altered.
 AFFECTED CLIENTS       backend, AI
@@ -222,7 +262,11 @@ BACKWARD COMPATIBLE?   no — this is a deliberate wire-value change on the clie
 AFFECTED CLIENTS       iOS (producer), backend (consumer), React (reader)
 REQUIRED MIGRATION     One-off UPDATE mapping notStarted→not_started and
                needsRevision→needs_revision on user_problem_progress (and any
-               design_topics rows). Then create ck_user_problem_progress_status_valid.
+               design_topics rows). The constraint that prevents recurrence now exists:
+               migration 0004_progress_check_constraints creates
+               ck_user_problem_progress_status_valid (and
+               ck_user_problem_progress_confidence_range) and performs the same data repair.
+               Correct the clients BEFORE applying 0004 to a live database — see §3.5.
 ```
 
 ### CN-006 — iOS stops writing to Postgres directly
@@ -236,3 +280,49 @@ AFFECTED CLIENTS       iOS, React, backend
 REQUIRED MIGRATION     Backfill design_topics → lld_*/hld_* matched by slug, then stop
                writing design_topics. Keep the legacy physical table (do not drop).
 ```
+
+---
+
+## Deployment: connection strings (verified 2026-09-26)
+
+**The direct database host is IPv6-only.** `dig db.<ref>.supabase.co A` returns *nothing*;
+`AAAA` returns `2406:da12:...`. Render's default networking is IPv4-only, so a deploy
+configured against the direct host cannot resolve it — it fails outright rather than
+degrading, and the failure appears only at deploy time.
+
+Both variables must therefore use the pooler (Supabase dashboard > Connect > Session pooler):
+
+```
+DATABASE_URL        -> aws-0-<region>.pooler.supabase.com:6543   (transaction mode: the app)
+DATABASE_URL_DIRECT -> aws-0-<region>.pooler.supabase.com:5432   (session mode: migrations)
+```
+
+Notes:
+
+* The pooler username is `postgres.<project-ref>` — with the dot. Plain `postgres` is rejected.
+* Session mode (5432) supports DDL, so migrations work through it.
+* **The region must be confirmed in the dashboard.** It cannot be inferred reliably from the
+  direct host's AAAA address, and a wrong region fails as a connection error that looks like
+  a credentials problem.
+
+## Migrations against a high-latency link
+
+Two settings caused repeated migration failures and are now fixed:
+
+1. **`statement_timeout` on migration connections** (`alembic/env.py`). Migrations previously
+   inherited the application's `DB_STATEMENT_TIMEOUT_MS=30000`. That budget is sized for an
+   HTTP request, not for `ALTER TABLE ... ADD CONSTRAINT`, which must validate the constraint
+   against every existing row. Against a remote pooler (measured ~3s round trip) the statement
+   was cancelled:
+   `asyncpg.exceptions.QueryCanceledError: canceling statement due to statement timeout`.
+   Migrations now set their own 10-minute ceiling. Note asyncpg requires this as a **string**
+   (`Dict[str, str]`); an int raises `ClientConfigurationError`.
+
+2. **`idle_in_transaction_session_timeout = 5min`** (database-level setting, now applied).
+   Without it, a leaked `idle in transaction` session holds locks indefinitely and blocks DDL.
+   This happened: an `ALTER TABLE` waited 2m53s on a transaction that had been idle 28 minutes,
+   held by a local dev server that had been left running. The lock only released when that
+   process was stopped. With this setting, PostgreSQL reclaims such sessions itself.
+
+**Operational rule: stop local servers before running migrations.** DDL needs an exclusive
+lock, and any long-lived idle transaction will block it for as long as it lives.

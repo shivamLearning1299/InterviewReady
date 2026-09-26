@@ -47,7 +47,9 @@ class AIConversationRepository:
         *,
         user_id: uuid.UUID,
         context_type: str,
-        context_id: uuid.UUID | None,
+        # TEXT, not a UUID: a DSA conversation stores the problem slug ("two-sum") while
+        # LLD/HLD store a topic UUID as text. See migration 0005_ai_context_id_text.
+        context_id: str | None,
         context_label: str | None,
         title: str | None = None,
         provider: str | None = None,

@@ -150,9 +150,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="InterviewReady API",
         description=DESCRIPTION,
         version="1.0.0",
+        # Interactive docs are disabled in production: they publish the full API surface,
+        # every schema and every route to anyone who can reach the host. The schema itself
+        # stays available at /openapi.json for tooling and clients, which is not sensitive
+        # (it describes the contract, not the data).
         openapi_url="/openapi.json",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url=None if settings.is_production else "/docs",
+        redoc_url=None if settings.is_production else "/redoc",
         lifespan=lifespan,
         openapi_tags=TAGS_METADATA,
         contact={"name": "InterviewReady"},

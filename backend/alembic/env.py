@@ -42,6 +42,11 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
+
+#: Statement timeout applied to migration connections, in milliseconds. Ten minutes: long
+#: enough for a constraint validation over a large table on a high-latency link, short
+#: enough that a genuinely stuck migration still fails rather than hanging forever.
+_MIGRATION_STATEMENT_TIMEOUT_MS: int = 600_000
 # ``set_main_option`` writes through configparser, which treats ``%`` as an interpolation
 # marker. Supabase passwords are frequently URL-encoded (``%40`` for ``@``), which would
 # otherwise abort with "invalid interpolation syntax". Doubling the percent is
@@ -230,7 +235,32 @@ async def run_async_migrations() -> None:
         connect_args={
             "statement_cache_size": 0,
             "prepared_statement_cache_size": 0,
-            "server_settings": {"application_name": "interviewready-alembic"},
+            "server_settings": {
+                "application_name": "interviewready-alembic",
+                # DDL gets its own timeout, deliberately independent of the application's
+                # `DB_STATEMENT_TIMEOUT_MS`.
+                #
+                # A migration runs ``ALTER TABLE ... ADD CONSTRAINT``, and PostgreSQL must
+                # validate the constraint against every existing row before it commits. The
+                # application's 30s budget is sized for a request/response cycle, not for
+                # DDL, and it is measured on the *server* while the client waits a full
+                # round trip per statement.
+                #
+                # Against a remote Supabase project that combination cancels the statement:
+                #
+                #   asyncpg.exceptions.QueryCanceledError: canceling statement due to
+                #   statement timeout
+                #   [SQL: ALTER TABLE user_problem_progress ADD CONSTRAINT
+                #         ck_user_problem_progress_status_valid CHECK (...)]
+                #
+                # Migrations are run interactively by a developer or once by a deploy, so a
+                # long ceiling costs nothing and removes a failure mode that is invisible
+                # locally (a throwaway database answers in microseconds).
+                #
+                # A STRING, not an int: asyncpg validates `server_settings` as
+                # ``Dict[str, str]`` and raises ClientConfigurationError on an int.
+                "statement_timeout": str(_MIGRATION_STATEMENT_TIMEOUT_MS),
+            },
         },
     )
 

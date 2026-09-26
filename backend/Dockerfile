@@ -57,12 +57,22 @@ COPY --chown=appuser:appuser . .
 
 USER appuser
 
+# Documentation only. The real port is $PORT at runtime (Render injects it; the default
+# below matches this EXPOSE for a plain `docker run`).
 EXPOSE 8000
 
 # Reports unhealthy until the database and auth configuration are both usable, so the
 # platform does not route traffic to an instance that cannot serve requests.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://localhost:8000/health/ready || exit 1
+# Probes the port the server is actually listening on, so the check still works when
+# $PORT differs from the default.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD curl -fsS "http://localhost:${PORT:-8000}/health/ready" || exit 1
 
 # Migrations run first so a release either brings the schema up to date or fails loudly.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Honour $PORT so a plain `docker run` behaves the same as Render, which overrides this
+# with its own command. Hardcoding 8000 here made local runs and production diverge, which
+# is exactly the kind of difference that only shows up after a deploy.
+#
+# `--workers` is left to the platform: Render's blueprint sets 2 explicitly, and a single
+# worker is the safe default when the port and CPU count are unknown.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -174,6 +174,7 @@ class Services:
             hld_repo=self.hld_repo,
             settings_repo=self.settings_repo,
             activity_repo=self.activity_repo,
+            session_repo=self.study_session_repo,
             settings=settings,
         )
         self.settings_service = SettingsService(settings_repo=self.settings_repo, settings=settings)

@@ -38,7 +38,21 @@ const DESIGN_ACTIONS: AIAction[] = [
 
 export interface AITutorPanelProps {
   contextType: AIContextType;
-  /** Problem id (DSA) or topic id (LLD/HLD). */
+  /**
+   * Identifies the entity the tutor is scoped to. The shape depends on `contextType`:
+   *
+   * - `dsa`  — the DSA problem **slug** (e.g. `'two-sum'`), i.e. `DSAProblemDetail.id`
+   *            or `Revision.problem_id`. The DSA catalog's primary key is its slug
+   *            (`dsa_problems.id TEXT`), so it is a slug and never a UUID.
+   * - `lld` / `hld` — the **topic UUID**, i.e. `LLDTopicDetail.id` / `HLDTopicDetail.id`.
+   *            Those tables use UUID primary keys.
+   * - `general` (or absent) — the caller omits this prop entirely; it is sent as `null`.
+   *
+   * The two shapes differ because `AIChatRequest.context_id` is a `str` that stores either
+   * a slug or a UUID: typing it as a UUID made every DSA tutor request fail Pydantic
+   * validation with a 422 before the request reached the service. Passing the wrong shape
+   * is therefore a real, previously-shipped defect — not a cosmetic mismatch.
+   */
   contextId?: string | null;
   /** Shown in the panel header so the user knows what the tutor can see. */
   contextLabel?: string | null;

@@ -83,3 +83,43 @@ services:
         sync: false
       - key: AI_API_KEY
         sync: false
+
+  # ---------------------------------------------------------------------------- frontend
+  # A static site, not a web service: the build output is plain files (index.html + hashed
+  # assets), so there is no server process, no runtime, and no cost. Render's free tier
+  # covers static sites even though free *web services* were removed.
+  #
+  # The rewrite is load-bearing. The app uses `BrowserRouter`, so URLs are real paths such as
+  # `/dsa/two-sum`. Without a rewrite, a hard refresh on any of those returns 404 from the
+  # static host — it appears the app randomly breaks, but only for users who reload.
+  - type: static
+    name: interviewready-web
+    # `rootDir` is required: Render runs `buildCommand` from the repository root, and there is
+    # no package.json there — the frontend is in frontend/. Without this, `npm ci` fails with
+    # "no such file or directory: package.json". With it, the build runs inside frontend/,
+    # where package.json and package-lock.json actually live.
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    # Relative to `rootDir`, so this is frontend/dist, not ./frontend/dist.
+    staticPublishPath: ./dist
+    # Node 22, matching frontend/.nvmrc and the version the build was verified against.
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Vite inlines VITE_* variables at BUILD time, so these must be present when the site is
+      # built — changing them requires a rebuild, not just a restart.
+      - key: VITE_API_BASE_URL
+        value: https://interviewready-api.onrender.com/api/v1
+      - key: VITE_USE_MOCKS
+        value: "false"
+      - key: VITE_SUPABASE_URL
+        value: https://qkuxfobfqioilwbjpvyf.supabase.co
+      # A secret: prompted in the dashboard rather than committed.
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+    routes:
+      # Serve real files first (hashed JS/CSS must not be rewritten to HTML), then fall through
+      # to index.html so the client router can resolve the path.
+      - type: rewrite
+        source: /*
+        destination: /index.html
